@@ -75,6 +75,85 @@ void show_image_cv(image p, const char *name, IplImage *disp)
     }
     cvShowImage(buff, disp);
 }
+
+float t_colors[6][3] = { {1,0,1}, {0,0,1},{0,1,1},{0,1,0},{1,1,0},{1,0,0} };
+
+float get_color(int c, int x, int max)
+{
+    float ratio = ((float)x/max)*5;
+    int i = floor(ratio);
+    int j = ceil(ratio);
+    ratio -= i;
+    float r = (1-ratio) * t_colors[i][c] + ratio*t_colors[j][c];
+    //printf("%f\n", r);
+    return r;
+}
+
+void t_draw_detections(Mat im, detection *dets, int num, float thresh, char **names, image **alphabet, int classes)
+{
+    int i,j;
+
+    for(i = 0; i < num; ++i){
+        char labelstr[4096] = {0};
+        int v_class = -1;
+        for(j = 0; j < classes; ++j){
+            if (dets[i].prob[j] > thresh){
+                if (v_class < 0) {
+                    strcat(labelstr, names[j]);
+                    v_class = j;
+                } else {
+                    strcat(labelstr, ", ");
+                    strcat(labelstr, names[j]);
+                }
+                printf("%s: %.0f%%\n", names[j], dets[i].prob[j]*100);
+            }
+        }
+        if(v_class >= 0){
+            int width = im.rows * .006;
+
+            /*
+               if(0){
+               width = pow(prob, 1./2.)*10+1;
+               alphabet = 0;
+               }
+             */
+
+            //printf("%d %s: %.0f%%\n", i, names[v_class], prob*100);
+            int offset = v_class*123457 % classes;
+            float red = get_color(2,offset,classes);
+            float green = get_color(1,offset,classes);
+            float blue = get_color(0,offset,classes);
+            float rgb[3];
+
+            //width = prob*20+2;
+
+            rgb[0] = red;
+            rgb[1] = green;
+            rgb[2] = blue;
+            box b = dets[i].bbox;
+            //printf("%f %f %f %f\n", b.x, b.y, b.w, b.h);
+
+            int left  = (b.x-b.w/2.)*im.cols;
+            int right = (b.x+b.w/2.)*im.cols;
+            int top   = (b.y-b.h/2.)*im.rows;
+            int bot   = (b.y+b.h/2.)*im.rows;
+
+            if(left < 0) left = 0;
+            if(right > im.cols-1) right = im.cols-1;
+            if(top < 0) top = 0;
+            if(bot > im.rows-1) bot = im.rows-1;
+
+            rectangle(im, Point(left, top), Point(right, bot), Scalar(red, green, blue),width);
+            // if (alphabet) {
+            //     image label = get_label(alphabet, labelstr, (im.rows*.03));
+            //     draw_label(im, top + width, left, label, rgb);
+            //     free_image(label);
+            // }
+
+        }
+    }
+}
+
 int main()
 {
   list *options = read_data_cfg("cfg/coco.data");
@@ -118,12 +197,12 @@ int main()
       //     }
       //   }
       // }
-      draw_detections(dark_image, dets, nboxes, thresh, names, alphabet, 20);
-
-      IplImage *disp = cvCreateImage(cvSize(dark_image.w,dark_image.h), IPL_DEPTH_8U, dark_image.c);
-      show_image_cv(dark_image,"bob",disp);
-      printf("NBoxes = %d\n",nboxes);
-      waitKey(30);
+      t_draw_detections(input_image, dets, nboxes, thresh, names, alphabet, 20);
+      imshow("output",input_image);
+      waitKey(1);
+      free_image(dark_image);
+      free_image(sized);
+      input_image.release();
     }
   }
   destroyAllWindows();
